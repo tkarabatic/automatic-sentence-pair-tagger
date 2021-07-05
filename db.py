@@ -7,7 +7,8 @@ from helpers import (
     get_path,
     get_unique_id_pairs,
     has_pair,
-    is_keyword_match
+    is_keyword_match,
+    write_to_file
 )
 
 config = dotenv_values('.env')
@@ -59,17 +60,20 @@ def create_tables(cursor):
     )
 
 
-# TODO
-# def read_sentence_pairs(is_match):
-#     print('reading sentence pairs...')
-#     query = '''
-#         SELECT j.first_sentence, j.second_sentence
-#         FROM %s AS j
-#         INNER JOIN %s AS s1 ON j.first_sentence_id = s1.id
-#         INNER JOIN %s AS s2 ON j.second_sentence_id = s2.id
-#         WHERE j.is_match = %d;
-#     ''' % (JUNCTION_TABLE_NAME, TABLE_NAME, TABLE_NAME, is_match)
-#     return lambda cursor: cursor.execute(query)
+def read_sentence_pairs(is_match, is_verified=0):
+    def fn(cursor):
+        print('reading sentence pairs...')
+        query = '''
+            SELECT j.first_sentence_id, j.second_sentence_id
+            FROM %s AS j
+            INNER JOIN %s AS s1 ON j.first_sentence_id = s1.id
+            INNER JOIN %s AS s2 ON j.second_sentence_id = s2.id
+            WHERE j.is_match = %d AND j.is_verified = %d;
+        ''' % (JUNCTION_TABLE_NAME, TABLE_NAME, TABLE_NAME, is_match,
+               is_verified)
+        cursor.execute(query)
+        return cursor.fetchall()
+    return fn
 
 
 def store_sentences(cursor):
@@ -200,11 +204,28 @@ def rate_unrated_pairs(batch_size=50, log_results=False):
     return db_action(store_similarity_from_data(rated))
 
 
-# TODO
-# def get_matching_sentence_pairs():
-#     return read_sentence_pairs(1)
+def get_matching_sentence_pairs(is_verified=False):
+    return db_action(read_sentence_pairs(1, int(is_verified)))
 
 
-# TODO
-# def get_non_matching_sentence_pairs():
-#     return read_sentence_pairs(0)
+def get_non_matching_sentence_pairs(is_verified=False):
+    return db_action(read_sentence_pairs(0, int(is_verified)))
+
+
+def write_pairs_to_csv(sentence_pairs, is_match=1):
+    print('writing sentence pairs to file...')
+    filename = config['OUTPUT_SENTENCE_FILENAME']
+    if not filename:
+        print('Output sentence filename not defined.')
+        return
+    sentence_rows = db_action(get_select(TABLE_NAME))
+    sentences = {}
+    for id, text in sentence_rows:
+        sentences[id] = text
+    rows = []
+    for pair in sentence_pairs:
+        sentence_1 = sentences[pair[0]]
+        sentence_2 = sentences[pair[1]]
+        rows.append('%s,%s,%d' % (sentence_1, sentence_2, is_match))
+    write_to_file(rows, filename)
+    print('done')

@@ -78,6 +78,13 @@ def get_path(filename):
     return os.path.join(CURRENT_FOLDER, filename)
 
 
+def write_to_file(items, filename, mode='w'):
+    file = open(get_path(filename), mode)
+    for it in items:
+        file.write('%s\n' % (it))
+    file.close()
+
+
 def get_dict_key_for_value(dict, value):
     for key, val in dict.items():
         if val == value:
